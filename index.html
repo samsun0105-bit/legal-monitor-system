@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
@@ -58,6 +59,7 @@
             bottom: 1.5rem;
             right: 1.5rem;
             z-index: 100;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -70,6 +72,7 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('monitor');
             const [isSyncing, setIsSyncing] = useState(false);
+            const [syncText, setSyncText] = useState('正在自動鑑別條文...');
             const [selectedLaw, setSelectedLaw] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [filterType, setFilterType] = useState('全部');
@@ -94,11 +97,11 @@
                 { id: 14, name: '精密作業勞工視機能保護設施標準', type: '法規命令', remoteDate: '2014-03-30', localCheckDate: UNIFIED_DATE },
                 { id: 15, name: '工業用機器人危害預防標準', type: '法規命令', remoteDate: '2018-02-14', localCheckDate: UNIFIED_DATE },
                 { id: 16, name: '鍋爐及壓力容器安全規則', type: '法規命令', remoteDate: '2014-07-01', localCheckDate: UNIFIED_DATE },
-                { id: 17, name: '游離輻射防護法', type: '法律', remoteDate: '2002-01-30', localCheckDate: UNIFIED_DATE },
-                { id: 18, name: '游離輻射防護法施行細則', type: '法規命令', remoteDate: '2008-02-22', localCheckDate: UNIFIED_DATE },
-                { id: 19, name: '游離輻射防護安全標準', type: '法規命令', remoteDate: '2005-12-30', localCheckDate: UNIFIED_DATE },
-                { id: 20, name: '放射性物質與可發生游離輻射設備及其輻射作業管理辦法', type: '法規命令', remoteDate: '2018-12-22', localCheckDate: UNIFIED_DATE },
-                { id: 21, name: '放射性物質或可發生游離輻射設備操作人員管理辦法', type: '法規命令', remoteDate: '2009-04-17', localCheckDate: UNIFIED_DATE },
+                { id: 17, name: '游離輻屬防護法', type: '法律', remoteDate: '2002-01-30', localCheckDate: UNIFIED_DATE },
+                { id: 18, name: '游離輻屬防護法施行細則', type: '法規命令', remoteDate: '2008-02-22', localCheckDate: UNIFIED_DATE },
+                { id: 19, name: '游離輻屬防護安全標準', type: '法規命令', remoteDate: '2005-12-30', localCheckDate: UNIFIED_DATE },
+                { id: 20, name: '放射性物質與可發生游離輻屬設備及其輻屬作業管理辦法', type: '法規命令', remoteDate: '2018-12-22', localCheckDate: UNIFIED_DATE },
+                { id: 21, name: '放射性物質或可發生游離輻屬設備操作人員管理辦法', type: '法規命令', remoteDate: '2009-04-17', localCheckDate: UNIFIED_DATE },
                 { id: 22, name: '事業單位僱用女性勞工夜間工作場所必要之安全衛生設施標準', type: '法規命令', remoteDate: '2015-03-31', localCheckDate: UNIFIED_DATE },
                 { id: 23, name: '機械設備器具安全標準', type: '法規命令', remoteDate: '2022-05-11', localCheckDate: UNIFIED_DATE },
                 { id: 24, name: '勞動基準法', type: '法律', remoteDate: '2024-07-31', localCheckDate: UNIFIED_DATE },
@@ -107,6 +110,53 @@
                 { id: 27, name: '勞工職業災害保險及保護法第十條規定參加保險辦法', type: '法規命令', remoteDate: '2022-03-09', localCheckDate: UNIFIED_DATE },
                 { id: 28, name: '缺氧症預防規則', type: '法規命令', remoteDate: '2014-06-26', localCheckDate: UNIFIED_DATE }
             ]);
+
+            // 匯出 Excel 的邏輯
+            const handleExport = () => {
+                const currentMonth = TODAY.getMonth() + 1;
+                const quarter = Math.ceil(currentMonth / 3);
+                const year = TODAY.getFullYear();
+                
+                const exportData = laws.map((law, index) => {
+                    const status = getLawStatus(law.remoteDate, law.localCheckDate);
+                    return {
+                        "序號": index + 1,
+                        "法規名稱": law.name,
+                        "法規類別": law.type,
+                        "鑑別季度": `${year} Q${quarter}`,
+                        "全國法規資料庫日期": law.remoteDate,
+                        "公司最近登錄/鑑別日期": law.localCheckDate,
+                        "合規狀態": status.text,
+                        "備註": status.code === 'danger' ? "發現新條文，需安排更新訓練" : "維持現行管理計畫"
+                    };
+                });
+
+                const worksheet = XLSX.utils.json_to_sheet(exportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "法規鑑別總表");
+                
+                const wscols = [
+                    {wch: 6}, {wch: 40}, {wch: 12}, {wch: 10}, {wch: 18}, {wch: 18}, {wch: 12}, {wch: 25}
+                ];
+                worksheet['!cols'] = wscols;
+
+                XLSX.writeFile(workbook, `職安法規鑑別總表_${year}_Q${quarter}.xlsx`);
+            };
+
+            // 【新功能】一鍵同步鑑別
+            const handleAllSync = () => {
+                setSyncText('正在批次執行全法規鑑別同步...');
+                setIsSyncing(true);
+                
+                setTimeout(() => {
+                    const todayStr = TODAY.toISOString().split('T')[0];
+                    setLaws(prev => prev.map(law => ({
+                        ...law,
+                        localCheckDate: todayStr
+                    })));
+                    setIsSyncing(false);
+                }, 2000);
+            };
 
             const getLawStatus = (remoteDate, localDate) => {
                 const rDate = new Date(remoteDate);
@@ -148,6 +198,7 @@
             }, [searchQuery, filterType, laws]);
 
             const handleAutoSync = (lawId) => {
+                setSyncText('正在自動鑑別條文...');
                 setIsSyncing(true);
                 setTimeout(() => {
                     setLaws(prev => prev.map(law => {
@@ -164,12 +215,13 @@
             };
 
             const startSync = (law) => {
+                setSyncText('正在讀取詳細對照資料...');
                 setIsSyncing(true);
                 setTimeout(() => {
                     setSelectedLaw(law);
                     setActiveTab('compare');
                     setIsSyncing(false);
-                }, 1200);
+                }, 1000);
             };
 
             return (
@@ -192,7 +244,18 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button className="hidden lg:flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-all shadow-md active:scale-95">
+                            {/* 新增：一鍵同步按鈕 */}
+                            <button 
+                                onClick={handleAllSync}
+                                className="hidden lg:flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-md active:scale-95 border-b-2 border-indigo-900"
+                            >
+                                <i className="fas fa-bolt"></i> 一鍵同步鑑別
+                            </button>
+
+                            <button 
+                                onClick={handleExport}
+                                className="hidden lg:flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-all shadow-md active:scale-95"
+                            >
                                 <i className="fas fa-file-export"></i> 匯出鑑別紀錄總表
                             </button>
                             <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -212,12 +275,12 @@
                     {/* Sync Overlay */}
                     {isSyncing && (
                         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-sm text-center">
-                            <div className="bg-white p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+                            <div className="bg-white p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden max-w-sm w-full mx-4">
                                 <div className="scan-line absolute inset-0"></div>
                                 <div className="relative z-10">
                                     <i className="fas fa-circle-notch text-5xl text-blue-600 animate-spin mb-6"></i>
-                                    <h3 className="text-xl font-black text-slate-800">正在自動鑑別條文...</h3>
-                                    <p className="text-slate-400 mt-2 text-sm font-medium">串接全國法規資料庫並更新狀態</p>
+                                    <h3 className="text-xl font-black text-slate-800">{syncText}</h3>
+                                    <p className="text-slate-400 mt-2 text-sm font-medium">串接全國法規資料庫並同步至公司內部清單</p>
                                 </div>
                             </div>
                         </div>
@@ -310,7 +373,13 @@
                                                     <button className="px-6 py-3 rounded-xl bg-white border border-slate-200 text-slate-600 font-black text-sm transition-all hover:bg-slate-50 active:scale-95">
                                                         <i className="fas fa-print mr-2"></i> 列印報告
                                                     </button>
-                                                    <button className="px-6 py-3 rounded-xl bg-blue-600 text-white font-black text-sm shadow-lg hover:bg-blue-700 transition-all active:scale-95">
+                                                    <button 
+                                                        onClick={() => {
+                                                            handleAutoSync(selectedLaw.id);
+                                                            setActiveTab('monitor');
+                                                        }}
+                                                        className="px-6 py-3 rounded-xl bg-blue-600 text-white font-black text-sm shadow-lg hover:bg-blue-700 transition-all active:scale-95"
+                                                    >
                                                         確認鑑別並更新日期
                                                     </button>
                                                 </div>
@@ -347,10 +416,10 @@
                     </main>
 
                     {/* Developer Info */}
-                    <div className="developer-tag">
-                        <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10 opacity-60 hover:opacity-100 transition-opacity cursor-default">
+                    <div className="developer-tag opacity-60 hover:opacity-100 transition-opacity">
+                        <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10">
                             <div className="w-2 h-2 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse"></div>
-                            <span className="text-[10px] font-black tracking-widest uppercase">System Developed By Sam Sun</span>
+                            <span className="text-[10px] font-black tracking-widest uppercase">System Developer By Sam Sun</span>
                         </div>
                     </div>
 
