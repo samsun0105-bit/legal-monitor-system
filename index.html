@@ -60,13 +60,6 @@
             z-index: 100;
             pointer-events: none;
         }
-
-        .status-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-        }
     </style>
 </head>
 <body>
@@ -85,7 +78,7 @@
             const TODAY = new Date('2026-03-23');
             const UNIFIED_DATE = '2026-03-02'; 
 
-            const initialLaws = [
+            const [laws, setLaws] = useState([
                 { id: 1, name: '職業安全衛生法', type: '法律', remoteDate: '2025-12-19', localCheckDate: UNIFIED_DATE },
                 { id: 2, name: '職業安全衛生法施行細則', type: '法規命令', remoteDate: '2020-02-27', localCheckDate: UNIFIED_DATE },
                 { id: 3, name: '職業安全衛生管理辦法', type: '法規命令', remoteDate: '2022-01-05', localCheckDate: UNIFIED_DATE },
@@ -114,7 +107,7 @@
                 { id: 26, name: '勞工職業災害保險及保護法施行細則', type: '法規命令', remoteDate: '2025-05-29', localCheckDate: UNIFIED_DATE },
                 { id: 27, name: '勞工職業災害保險及保護法第十條規定參加保險辦法', type: '法規命令', remoteDate: '2022-03-09', localCheckDate: UNIFIED_DATE },
                 { id: 28, name: '缺氧症預防規則', type: '法規命令', remoteDate: '2014-06-26', localCheckDate: UNIFIED_DATE }
-            ];
+            ]);
 
             const getLawStatus = (remoteDate, localDate) => {
                 const rDate = new Date(remoteDate);
@@ -148,12 +141,28 @@
             };
 
             const filteredLaws = useMemo(() => {
-                return initialLaws.filter(law => {
+                return laws.filter(law => {
                     const matchesSearch = law.name.includes(searchQuery);
                     const matchesFilter = filterType === '全部' || law.type === filterType;
                     return matchesSearch && matchesFilter;
                 });
-            }, [searchQuery, filterType]);
+            }, [searchQuery, filterType, laws]);
+
+            const handleAutoSync = (lawId) => {
+                setIsSyncing(true);
+                setTimeout(() => {
+                    setLaws(prev => prev.map(law => {
+                        if (law.id === lawId) {
+                            return {
+                                ...law,
+                                localCheckDate: TODAY.toISOString().split('T')[0]
+                            };
+                        }
+                        return law;
+                    }));
+                    setIsSyncing(false);
+                }, 1200);
+            };
 
             const startSync = (law) => {
                 setIsSyncing(true);
@@ -162,10 +171,6 @@
                     setActiveTab('compare');
                     setIsSyncing(false);
                 }, 1200);
-            };
-
-            const exportReport = () => {
-                alert("系統正在產生成符合性鑑別總表 (Excel格式)...");
             };
 
             return (
@@ -188,10 +193,7 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <button 
-                                onClick={exportReport}
-                                className="hidden lg:flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-all shadow-md active:scale-95"
-                            >
+                            <button className="hidden lg:flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-black hover:bg-slate-900 transition-all shadow-md active:scale-95">
                                 <i className="fas fa-file-export"></i> 匯出鑑別紀錄總表
                             </button>
                             <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
@@ -215,8 +217,8 @@
                                 <div className="scan-line absolute inset-0"></div>
                                 <div className="relative z-10">
                                     <i className="fas fa-circle-notch text-5xl text-blue-600 animate-spin mb-6"></i>
-                                    <h3 className="text-xl font-black text-slate-800">正在獲取最新條文...</h3>
-                                    <p className="text-slate-400 mt-2 text-sm font-medium">串接全國法規資料庫中</p>
+                                    <h3 className="text-xl font-black text-slate-800">正在自動鑑別條文...</h3>
+                                    <p className="text-slate-400 mt-2 text-sm font-medium">串接全國法規資料庫並更新狀態</p>
                                 </div>
                             </div>
                         </div>
@@ -226,7 +228,6 @@
                         <div className="max-w-6xl mx-auto">
                             {activeTab === 'monitor' ? (
                                 <div className="fade-in space-y-6">
-                                    {/* Law List */}
                                     <div className="grid grid-cols-1 gap-4">
                                         {filteredLaws.map((law, index) => {
                                             const status = getLawStatus(law.remoteDate, law.localCheckDate);
@@ -234,7 +235,6 @@
                                                 <div key={law.id} className="p-5 rounded-2xl transition-all flex flex-col lg:flex-row lg:items-center justify-between law-card-glow gap-6">
                                                     <div className="flex gap-4 items-center flex-1">
                                                         <div className="relative shrink-0">
-                                                            {/* 調淡項次方塊顏色為橘色 bg-orange-400/90 */}
                                                             <div className="w-12 h-12 rounded-2xl flex flex-col items-center justify-center shadow-md bg-orange-400/90 text-white">
                                                                 <span className="text-xs font-black tracking-tight">{index + 1}</span>
                                                             </div>
@@ -260,13 +260,8 @@
                                                                     </span>
                                                                 </div>
                                                                 <div className="ml-4 flex items-center gap-1.5">
-                                                                    {/* 鑑別完成標籤 */}
                                                                     <span className={`text-[10px] font-black px-3 py-1 rounded shadow-sm ${status.code === 'success' ? 'bg-emerald-600 text-white' : status.code === 'danger' ? 'bg-rose-50 text-rose-500' : 'bg-slate-50 text-slate-400'}`}>
                                                                         {status.text}
-                                                                    </span>
-                                                                    {/* 新增：尚未鑑別標籤 (無色透明虛線框) */}
-                                                                    <span className="text-[10px] font-black px-3 py-1 rounded border border-dashed border-slate-300 text-slate-400 bg-transparent">
-                                                                        尚未鑑別
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -275,9 +270,11 @@
 
                                                     <div className="flex items-center gap-3 shrink-0 ml-16 lg:ml-0">
                                                         <button onClick={() => startSync(law)} className="flex-1 md:flex-none px-5 py-3 rounded-xl font-black text-xs bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 transition-all active:scale-95">查看詳情</button>
-                                                        <button onClick={() => startSync(law)} className={`flex-1 md:flex-none px-8 py-3 rounded-xl font-black text-xs text-white shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 ${status.code === 'danger' ? 'bg-rose-600 shadow-rose-600/20 hover:bg-rose-700' : 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700'}`}>
-                                                            <i className={`fas ${status.code === 'danger' ? 'fa-bolt' : 'fa-check-double'} text-[10px]`}></i>
-                                                            {status.code === 'danger' ? '立即鑑別' : '重新鑑別'}
+                                                        <button 
+                                                            onClick={() => handleAutoSync(law.id)} 
+                                                            className={`flex-1 md:flex-none px-8 py-3 rounded-xl font-black text-xs text-white shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center justify-center ${status.code === 'danger' ? 'bg-rose-600 shadow-rose-600/20 hover:bg-rose-700 animate-pulse' : 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-700'}`}
+                                                        >
+                                                            {status.code === 'danger' ? '立即鑑別' : '自動鑑別'}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -363,11 +360,6 @@
                             <span>資料來源：全國法規資料庫 API</span>
                             <span className="text-slate-200">|</span>
                             <span>已配置：ISO 45001 符合性鑑別模組</span>
-                        </div>
-                        <div className="flex gap-4">
-                            <span className="flex items-center gap-1"><span className="status-dot bg-rose-500 scale-75"></span> 需更新</span>
-                            <span className="flex items-center gap-1"><span className="status-dot bg-amber-500 scale-75"></span> 超過1年未回顧</span>
-                            <span className="flex items-center gap-1"><span className="status-dot bg-emerald-600 scale-75"></span> 鑑別時效內</span>
                         </div>
                     </footer>
                 </div>
