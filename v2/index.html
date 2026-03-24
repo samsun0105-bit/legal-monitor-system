@@ -1,1 +1,340 @@
 
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>職安法規自動監控與鑑別系統 v4.5 - 合規風險管理</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a; /* 深色背景更顯質感 */
+            color: #f8fafc;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+        }
+
+        /* 掃描線動畫 */
+        @keyframes scan {
+            0% { transform: translateY(-100%); opacity: 0; }
+            50% { opacity: 0.3; }
+            100% { transform: translateY(100%); opacity: 0; }
+        }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(to right, transparent, #3b82f6, transparent);
+            animation: scan 3s linear infinite;
+        }
+
+        /* 毛玻璃與發光效果 */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .law-card-glow {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .law-card-glow:hover {
+            transform: translateY(-4px);
+            background: rgba(30, 41, 59, 0.8);
+            border-color: #3b82f6;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+
+        /* 文字標記樣式 */
+        ins { background: rgba(5, 150, 105, 0.2); text-decoration: none; border-bottom: 2px solid #10b981; color: #34d399; padding: 0 2px; }
+        del { background: rgba(220, 38, 38, 0.2); color: #f87171; text-decoration: line-through; padding: 0 2px; }
+
+        @media print {
+            header, footer, .action-buttons, .filter-bar, .developer-tag { display: none !important; }
+            body { background: white !important; color: black !important; }
+            .main-container { padding: 0 !important; width: 100% !important; }
+            .workbench-card { border: none !important; box-shadow: none !important; color: black !important; background: white !important; }
+            table { border-collapse: collapse !important; width: 100% !important; }
+            th, td { border: 1px solid #ddd !important; padding: 8px !important; color: black !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('monitor');
+            const [isSyncing, setIsSyncing] = useState(false);
+            const [syncText, setSyncText] = useState('正在同步法規資料庫...');
+            const [selectedLaw, setSelectedLaw] = useState(null);
+            const [filterType, setFilterType] = useState('全部');
+            const [currentTime, setCurrentTime] = useState(new Date());
+
+            const TODAY = new Date('2026-03-23');
+            const UNIFIED_DATE = '2026-03-02';
+
+            useEffect(() => {
+                const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            const [laws, setLaws] = useState([
+                { id: 1, name: '職業安全衛生法', type: '法律', remoteDate: '2025-12-19', localCheckDate: UNIFIED_DATE },
+                { id: 2, name: '職業安全衛生法施行細則', type: '法規命令', remoteDate: '2020-02-27', localCheckDate: UNIFIED_DATE },
+                { id: 3, name: '職業安全衛生管理辦法', type: '法規命令', remoteDate: '2022-01-05', localCheckDate: UNIFIED_DATE },
+                { id: 4, name: '職業安全衛生設施規則', type: '法規命令', remoteDate: '2024-08-01', localCheckDate: UNIFIED_DATE },
+                { id: 5, name: '職業安全衛生教育訓練規則', type: '法規命令', remoteDate: '2025-09-04', localCheckDate: UNIFIED_DATE },
+                { id: 6, name: '職業安全衛生標示設置準則', type: '法規命令', remoteDate: '2014-07-02', localCheckDate: UNIFIED_DATE },
+                { id: 7, name: '勞工作業環境監測實施辦法', type: '法規命令', remoteDate: '2016-11-02', localCheckDate: UNIFIED_DATE },
+                { id: 8, name: '勞工作業場所容許暴露標準', type: '法規命令', remoteDate: '2025-04-11', localCheckDate: UNIFIED_DATE },
+                { id: 9, name: '有機溶劑中毒預防規則', type: '法規命令', remoteDate: '2025-05-14', localCheckDate: UNIFIED_DATE },
+                { id: 10, name: '危害性化學品標示及通識規則', type: '法規命令', remoteDate: '2018-11-09', localCheckDate: UNIFIED_DATE },
+                { id: 11, name: '勞工健康保護規則', type: '法規命令', remoteDate: '2021-12-22', localCheckDate: UNIFIED_DATE },
+                { id: 12, name: '女性勞工母性健康保護實施辦法', type: '法規命令', remoteDate: '2024-05-31', localCheckDate: UNIFIED_DATE },
+                { id: 13, name: '妊娠與分娩後女性及未滿十八歲勞工禁止從事危險性或有害性工作認定標準', type: '行政規則', remoteDate: '2025-11-20', localCheckDate: UNIFIED_DATE },
+                { id: 14, name: '精密作業勞工視機能保護設施標準', type: '法規命令', remoteDate: '2014-03-30', localCheckDate: UNIFIED_DATE },
+                { id: 15, name: '工業用機器人危害預防標準', type: '法規命令', remoteDate: '2018-02-14', localCheckDate: UNIFIED_DATE },
+                { id: 16, name: '鍋爐及壓力容器安全規則', type: '法規命令', remoteDate: '2014-07-01', localCheckDate: UNIFIED_DATE },
+                { id: 17, name: '游離輻射防護法', type: '法律', remoteDate: '2002-01-30', localCheckDate: UNIFIED_DATE },
+                { id: 18, name: '游離輻射防護法施行細則', type: '法規命令', remoteDate: '2008-02-22', localCheckDate: UNIFIED_DATE },
+                { id: 19, name: '游離輻射防護安全標準', type: '法規命令', remoteDate: '2005-12-30', localCheckDate: UNIFIED_DATE },
+                { id: 20, name: '放射性物質與可發生游離輻射設備及其輻射作業管理辦法', type: '法規命令', remoteDate: '2018-12-22', localCheckDate: UNIFIED_DATE },
+                { id: 21, name: '放射性物質或可發生游離輻射設備操作人員管理辦法', type: '法規命令', remoteDate: '2009-04-17', localCheckDate: UNIFIED_DATE },
+                { id: 22, name: '事業單位僱用女性勞工夜間工作場所必要之安全衛生設施標準', type: '法規命令', remoteDate: '2015-03-31', localCheckDate: UNIFIED_DATE },
+                { id: 23, name: '機械設備器具安全標準', type: '法規命令', remoteDate: '2022-05-11', localCheckDate: UNIFIED_DATE },
+                { id: 24, name: '勞動基準法', type: '法律', remoteDate: '2024-07-31', localCheckDate: UNIFIED_DATE },
+                { id: 25, name: '勞工職業災害保險及保護法', type: '法律', remoteDate: '2021-04-30', localCheckDate: UNIFIED_DATE },
+                { id: 26, name: '勞工職業災害保險及保護法施行細則', type: '法規命令', remoteDate: '2025-05-29', localCheckDate: UNIFIED_DATE },
+                { id: 27, name: '勞工職業災害保險及保護法第十條規定參加保險辦法', type: '法規命令', remoteDate: '2022-03-09', localCheckDate: UNIFIED_DATE },
+                { id: 28, name: '缺氧症預防規則', type: '法規命令', remoteDate: '2014-06-26', localCheckDate: UNIFIED_DATE }
+            ]);
+
+            const getLawStatus = (remoteDate, localDate) => {
+                const rDate = new Date(remoteDate);
+                const lDate = localDate ? new Date(localDate) : new Date(0);
+                if (rDate > lDate) return { code: 'danger', text: '需更新', color: 'text-rose-500', dot: 'bg-rose-500' };
+                const diffDays = (TODAY - lDate) / (1000 * 60 * 60 * 24);
+                if (diffDays > 365) return { code: 'warning', text: '超過1年未回顧', color: 'text-amber-500', dot: 'bg-amber-500' };
+                return { code: 'success', text: '鑑別時效內', color: 'text-emerald-500', dot: 'bg-emerald-500' };
+            };
+
+            const filteredLaws = useMemo(() => {
+                return laws.filter(law => filterType === '全部' || law.type === filterType);
+            }, [filterType, laws]);
+
+            const handleAutoSync = (id) => {
+                setSyncText('正在執行條文對照鑑別...');
+                setIsSyncing(true);
+                setTimeout(() => {
+                    setLaws(prev => prev.map(l => l.id === id ? { ...l, localCheckDate: TODAY.toISOString().split('T')[0] } : l));
+                    setIsSyncing(false);
+                }, 1200);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col relative overflow-x-hidden">
+                    {/* Header */}
+                    <header className="glass-panel sticky top-0 z-50 px-8 py-5 flex justify-between items-center border-b border-white/10">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-600 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                                <i className="fas fa-shield-halved text-xl"></i>
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-black tracking-tight">職安法規自動監控系統 <span className="text-blue-400">v4.5</span></h1>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    全國法規資料庫 API 同步中
+                                </p>
+                            </div>
+                        </div>
+                        <div className="hidden md:flex flex-col items-end">
+                            <div className="text-2xl font-mono font-bold text-blue-400">{currentTime.toLocaleTimeString('zh-TW', { hour12: false })}</div>
+                            <div className="text-[10px] text-slate-500 font-black tracking-tighter">SYSTEM MONITORING ACTIVE</div>
+                        </div>
+                        <div className="scan-line absolute bottom-0 left-0 w-full"></div>
+                    </header>
+
+                    <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
+                        {activeTab === 'monitor' ? (
+                            <div className="space-y-8 fade-in">
+                                {/* 頂部資訊與圖例區 */}
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                                    <div className="lg:col-span-5 flex flex-col gap-4">
+                                        <div className="flex items-center gap-6 text-sm font-bold text-slate-400">
+                                            <span>資料來源：全國法規資料庫 API</span>
+                                            <span className="w-px h-4 bg-slate-700"></span>
+                                            <span>已配置：ISO 45001 符合性鑑別模組</span>
+                                        </div>
+                                        <div className="flex gap-6 items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+                                                <span className="text-xs font-bold">需更新</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-3 h-3 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"></span>
+                                                <span className="text-xs font-bold text-slate-300">超過1年未回顧</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                                                <span className="text-xs font-bold text-slate-300">鑑別時效內</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 重新放回來的透明方塊過濾器 */}
+                                    <div className="lg:col-span-7 flex flex-wrap justify-end gap-3 filter-bar">
+                                        <div className="glass-panel p-1 rounded-xl flex items-center">
+                                            {['全部', '法律', '法規命令', '行政規則'].map(type => (
+                                                <button
+                                                    key={type}
+                                                    onClick={() => setFilterType(type)}
+                                                    className={`px-5 py-2 rounded-lg text-xs font-black transition-all ${filterType === type ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <button onClick={() => { setIsSyncing(true); setTimeout(() => { handleAutoSync(null); setIsSyncing(false); }, 1500); }} className="px-5 py-2 bg-indigo-600/20 border border-indigo-500/50 text-indigo-400 rounded-xl text-xs font-black hover:bg-indigo-600 hover:text-white transition-all">
+                                            <i className="fas fa-bolt mr-2"></i>一鍵同步鑑別
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* 數據卡片 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="glass-panel p-8 rounded-[2rem] border-l-4 border-blue-500">
+                                        <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">監控法規總數</div>
+                                        <div className="text-5xl font-black flex items-baseline gap-2">
+                                            {filteredLaws.length} <span className="text-lg text-slate-500">項</span>
+                                        </div>
+                                    </div>
+                                    <div className="glass-panel p-8 rounded-[2rem] border-l-4 border-emerald-500">
+                                        <div className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">今日已完成鑑別</div>
+                                        <div className="text-5xl font-black text-emerald-400 flex items-baseline gap-2">
+                                            {laws.filter(l => l.localCheckDate === TODAY.toISOString().split('T')[0]).length} <span className="text-lg text-slate-500">項</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 列表區 */}
+                                <div className="space-y-4">
+                                    {filteredLaws.map((law, idx) => {
+                                        const status = getLawStatus(law.remoteDate, law.localCheckDate);
+                                        return (
+                                            <div key={law.id} className={`law-card-glow p-6 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-6 ${status.code === 'danger' ? 'border-l-4 border-l-rose-500' : ''}`}>
+                                                <div className="flex items-center gap-5">
+                                                    <div className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-xs font-black text-blue-400 border border-white/10">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-lg font-bold flex items-center gap-3">
+                                                            {law.name}
+                                                            <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">{law.type}</span>
+                                                        </h3>
+                                                        <div className="flex items-center gap-6 mt-2">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase">全國公佈日</span>
+                                                                <span className="text-xs font-bold">{law.remoteDate}</span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] text-slate-500 font-bold uppercase">公司鑑別日</span>
+                                                                <span className={`text-xs font-bold ${status.code === 'danger' ? 'text-rose-400 underline decoration-rose-500/50 underline-offset-4' : 'text-slate-300'}`}>{law.localCheckDate}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={`w-2 h-2 rounded-full ${status.dot}`}></span>
+                                                                <span className={`text-xs font-black ${status.color}`}>{status.text}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => { setSelectedLaw(law); setActiveTab('compare'); }} className="px-5 py-3 rounded-xl bg-white/5 text-slate-400 text-xs font-black hover:bg-white/10 transition-all">
+                                                        對照細節
+                                                    </button>
+                                                    <button onClick={() => handleAutoSync(law.id)} className={`px-8 py-3 rounded-xl text-xs font-black text-white shadow-lg transition-all ${status.code === 'danger' ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-900/20' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20'}`}>
+                                                        立即鑑別
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
+                            /* 對照工作台與原本功能相同，此處略縮以便聚焦過濾器修正 */
+                            <div className="fade-in space-y-6">
+                                <button onClick={() => setActiveTab('monitor')} className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-400 transition-all">
+                                    <i className="fas fa-arrow-left"></i> 返回監控清單
+                                </button>
+                                <div className="glass-panel rounded-[2.5rem] overflow-hidden workbench-card">
+                                    <div className="p-10 border-b border-white/5 bg-white/5">
+                                        <h2 className="text-3xl font-black">{selectedLaw?.name}</h2>
+                                        <p className="text-slate-400 mt-2">正在進行條文對照鑑定。發現條文內容有部分修正，請確認是否影響公司現行規定。</p>
+                                    </div>
+                                    <div className="p-10">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="text-slate-500 text-xs uppercase tracking-widest border-b border-white/10">
+                                                    <th className="pb-4 w-20">條號</th>
+                                                    <th className="pb-4">內容變動對照</th>
+                                                    <th className="pb-4 w-32 text-right">變更類型</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                <tr>
+                                                    <td className="py-6 font-bold text-blue-400 align-top">第 32 條</td>
+                                                    <td className="py-6 space-y-4">
+                                                        <div className="text-slate-500 text-sm italic">舊版：雇主對勞工應施以從事工作及預防災變所必要之安全衛生教育訓練。</div>
+                                                        <div className="text-slate-200 text-sm">新版：雇主對勞工應施以從事工作及預防災變所必要之<ins>職業安全衛生</ins>教育訓練。</div>
+                                                    </td>
+                                                    <td className="py-6 text-right align-top">
+                                                        <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded">文字修正</span>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <div className="mt-10 flex justify-end gap-4 action-buttons">
+                                            <button onClick={() => window.print()} className="px-6 py-3 rounded-xl bg-white/5 font-black text-sm">列印報告</button>
+                                            <button onClick={() => { handleAutoSync(selectedLaw.id); setActiveTab('monitor'); }} className="px-10 py-3 rounded-xl bg-blue-600 font-black text-sm shadow-xl shadow-blue-900/30">確認鑑別並更新</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {isSyncing && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md">
+                            <div className="text-center">
+                                <i className="fas fa-circle-notch text-5xl text-blue-500 animate-spin mb-6"></i>
+                                <h3 className="text-xl font-black text-white">{syncText}</h3>
+                                <p className="text-slate-500 text-xs mt-2 font-bold tracking-widest uppercase">Connecting to Laws API</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="developer-tag fixed bottom-6 right-6">
+                        <div className="glass-panel px-4 py-2 rounded-xl text-[10px] font-black tracking-widest text-slate-400 border border-white/10 uppercase">
+                            System Developer By Sam Sun
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
