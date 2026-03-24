@@ -86,30 +86,29 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // 模擬全國法規資料庫的異動數據庫
         const LAW_DIFF_DATABASE = {
-            1: { // 職業安全衛生法
+            1: { 
                 rows: [
                     { no: '第 4 條', old: '本法適用於各業。但因事業規模、性質及風險程度...', new: '本法適用於各業。但因事業規模、性質及風險程度，經中央主管機關指定公告者，<ins>得分階段適用</ins>。', note: '擴大適用範圍' },
                     { no: '第 45 條', old: '有下列情事之一者，處新臺幣三萬元以上十五萬元以下罰鍰...', new: '有下列情事之一者，處新臺幣三萬元以上<ins>三十萬元</ins>以下罰鍰...', note: '罰則加重' }
                 ],
                 ai: '本次修正主要針對罰則金額上限進行調整，並授權主管機關得視風險程度分階段擴大適用範圍。公司應注意相關附屬法規之指定公告日期。'
             },
-            4: { // 職業安全衛生設施規則
+            4: { 
                 rows: [
                     { no: '第 21 條', old: '雇主對於勞工從事作業，應採取必要之安全設備及措施。', new: '雇主對於勞工從事作業，應採取必要之安全設備及措施，<ins>並應落實自動檢查計畫</ins>。', note: '加強自主管理' },
                     { no: '第 128-1 條', old: '(新增條文)', new: '<ins>雇主對於高溫環境作業勞工，應提供必要之散熱設備及足夠之飲用水。</ins>', note: '新增熱危害預防' }
                 ],
                 ai: '設施規則增加了對氣候變遷下熱危害預防的強制性規定，建議採購單位確認廠內散熱設備設施是否充足。'
             },
-            8: { // 勞工作業場所容許暴露標準
+            8: { 
                 rows: [
                     { no: '附表一', old: '甲苯容許濃度：100 ppm', new: '甲苯容許濃度：<ins>50 ppm</ins>', note: '標準趨嚴' },
                     { no: '附表一', old: '二甲苯容許濃度：100 ppm', new: '二甲苯容許濃度：<ins>80 ppm</ins>', note: '標準趨嚴' }
                 ],
                 ai: '多項化學物質之容許暴露濃度調降。建議環境監測單位立即檢視廠內監測紀錄，確認是否仍符合最新標準。'
             },
-            24: { // 勞動基準法
+            24: { 
                 rows: [
                     { no: '第 32-1 條', old: '雇主依第三十二條第一項及第二項規定使勞工延長工作時間...', new: '雇主依第三十二條第一項及第二項規定使勞工延長工作時間，<ins>應核實記載至分鐘為止</ins>。', note: '工時記載精細化' }
                 ],
@@ -117,10 +116,8 @@
             }
         };
 
-        // 預設填充函數
         const getMockDiff = (law) => {
             if (LAW_DIFF_DATABASE[law.id]) return LAW_DIFF_DATABASE[law.id];
-            
             return {
                 rows: [
                     { 
@@ -143,39 +140,55 @@
             const [filterType, setFilterType] = useState('全部');
             const [currentTime, setCurrentTime] = useState(new Date());
 
-            const TODAY_STR = '2026-03-24';
+            // --- 核心更新功能：自動獲取今日日期 ---
+            const getTodayStr = () => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            };
+
             const UNIFIED_INITIAL_DATE = '2026-03-02';
 
-            const [laws, setLaws] = useState([
-                { id: 1, name: '職業安全衛生法', type: '法律', remoteDate: '2025-12-19', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 2, name: '職業安全衛生法施行細則', type: '法規命令', remoteDate: '2020-02-27', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 3, name: '職業安全衛生管理辦法', type: '法規命令', remoteDate: '2022-01-05', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 4, name: '職業安全衛生設施規則', type: '法規命令', remoteDate: '2024-08-01', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 5, name: '職業安全衛生教育訓練規則', type: '法規命令', remoteDate: '2025-09-04', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 6, name: '職業安全衛生標示設置準則', type: '法規命令', remoteDate: '2014-07-02', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 7, name: '勞工作業環境監測實施辦法', type: '法規命令', remoteDate: '2016-11-02', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 8, name: '勞工作業場所容許暴露標準', type: '法規命令', remoteDate: '2025-04-11', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 9, name: '有機溶劑中毒預防規則', type: '法規命令', remoteDate: '2025-05-14', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 10, name: '危害性化學品標示及通識規則', type: '法規命令', remoteDate: '2018-11-09', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 11, name: '勞工健康保護規則', type: '法規命令', remoteDate: '2021-12-22', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 12, name: '女性勞工母性健康保護實施辦法', type: '法規命令', remoteDate: '2024-05-31', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 13, name: '妊娠與分娩後女性及未滿十八歲勞工禁止從事危險性或有害性工作認定標準', type: '行政規則', remoteDate: '2025-11-20', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 14, name: '精密作業勞工視機能保護設施標準', type: '法規命令', remoteDate: '2014-03-30', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 15, name: '工業用機器人危害預防標準', type: '法規命令', remoteDate: '2018-02-14', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 16, name: '鍋爐及壓力容器安全規則', type: '法規命令', remoteDate: '2014-07-01', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 17, name: '游離輻射防護法', type: '法律', remoteDate: '2002-01-30', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 18, name: '游離輻射防護法施行細則', type: '法規命令', remoteDate: '2008-02-22', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 19, name: '游離輻射防護安全標準', type: '法規命令', remoteDate: '2005-12-30', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 20, name: '放射性物質與可發生游離輻射設備及其輻射作業管理辦法', type: '法規命令', remoteDate: '2018-12-22', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 21, name: '放射性物質或可發生游離輻射設備操作人員管理辦法', type: '法規命令', remoteDate: '2009-04-17', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 22, name: '事業單位僱用女性勞工夜間工作場所必要之安全衛生設施標準', type: '法規命令', remoteDate: '2015-03-31', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 23, name: '機械設備器具安全標準', type: '法規命令', remoteDate: '2022-05-11', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 24, name: '勞動基準法', type: '法律', remoteDate: '2024-07-31', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 25, name: '勞工職業災害保險及保護法', type: '法律', remoteDate: '2021-04-30', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 26, name: '勞工職業災害保險及保護法施行細則', type: '法規命令', remoteDate: '2025-05-29', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 27, name: '勞工職業災害保險及保護法第十條規定參加保險辦法', type: '法規命令', remoteDate: '2022-03-09', localCheckDate: UNIFIED_INITIAL_DATE },
-                { id: 28, name: '缺氧症預防規則', type: '法規命令', remoteDate: '2014-06-26', localCheckDate: UNIFIED_INITIAL_DATE }
-            ]);
+            // --- 核心更新功能：從 LocalStorage 讀取或初始化數據 ---
+            const [laws, setLaws] = useState(() => {
+                const savedLaws = localStorage.getItem('osh_laws_data');
+                if (savedLaws) return JSON.parse(savedLaws);
+                
+                return [
+                    { id: 1, name: '職業安全衛生法', type: '法律', remoteDate: '2025-12-19', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 2, name: '職業安全衛生法施行細則', type: '法規命令', remoteDate: '2020-02-27', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 3, name: '職業安全衛生管理辦法', type: '法規命令', remoteDate: '2022-01-05', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 4, name: '職業安全衛生設施規則', type: '法規命令', remoteDate: '2024-08-01', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 5, name: '職業安全衛生教育訓練規則', type: '法規命令', remoteDate: '2025-09-04', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 6, name: '職業安全衛生標示設置準則', type: '法規命令', remoteDate: '2014-07-02', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 7, name: '勞工作業環境監測實施辦法', type: '法規命令', remoteDate: '2016-11-02', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 8, name: '勞工作業場所容許暴露標準', type: '法規命令', remoteDate: '2025-04-11', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 9, name: '有機溶劑中毒預防規則', type: '法規命令', remoteDate: '2025-05-14', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 10, name: '危害性化學品標示及通識規則', type: '法規命令', remoteDate: '2018-11-09', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 11, name: '勞工健康保護規則', type: '法規命令', remoteDate: '2021-12-22', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 12, name: '女性勞工母性健康保護實施辦法', type: '法規命令', remoteDate: '2024-05-31', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 13, name: '妊娠與分娩後女性及未滿十八歲勞工禁止從事危險性或有害性工作認定標準', type: '行政規則', remoteDate: '2025-11-20', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 14, name: '精密作業勞工視機能保護設施標準', type: '法規命令', remoteDate: '2014-03-30', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 15, name: '工業用機器人危害預防標準', type: '法規命令', remoteDate: '2018-02-14', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 16, name: '鍋爐及壓力容器安全規則', type: '法規命令', remoteDate: '2014-07-01', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 17, name: '游離輻射防護法', type: '法律', remoteDate: '2002-01-30', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 18, name: '游離輻射防護法施行細則', type: '法規命令', remoteDate: '2008-02-22', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 19, name: '游離輻射防護安全標準', type: '法規命令', remoteDate: '2005-12-30', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 20, name: '放射性物質與可發生游離輻射設備及其輻射作業管理辦法', type: '法規命令', remoteDate: '2018-12-22', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 21, name: '放射性物質或可發生游離輻射設備操作人員管理辦法', type: '法規命令', remoteDate: '2009-04-17', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 22, name: '事業單位僱用女性勞工夜間工作場所必要之安全衛生設施標準', type: '法規命令', remoteDate: '2015-03-31', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 23, name: '機械設備器具安全標準', type: '法規命令', remoteDate: '2022-05-11', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 24, name: '勞動基準法', type: '法律', remoteDate: '2024-07-31', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 25, name: '勞工職業災害保險及保護法', type: '法律', remoteDate: '2021-04-30', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 26, name: '勞工職業災害保險及保護法施行細則', type: '法規命令', remoteDate: '2025-05-29', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 27, name: '勞工職業災害保險及保護法第十條規定參加保險辦法', type: '法規命令', remoteDate: '2022-03-09', localCheckDate: UNIFIED_INITIAL_DATE },
+                    { id: 28, name: '缺氧症預防規則', type: '法規命令', remoteDate: '2014-06-26', localCheckDate: UNIFIED_INITIAL_DATE }
+                ];
+            });
+
+            // --- 核心更新功能：當數據變動時自動儲存至永久空間 ---
+            useEffect(() => {
+                localStorage.setItem('osh_laws_data', JSON.stringify(laws));
+            }, [laws]);
 
             useEffect(() => {
                 const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -195,7 +208,7 @@
             const getLawStatus = (remoteDate, localDate) => {
                 const rDate = new Date(remoteDate);
                 const lDate = localDate ? new Date(localDate) : new Date(0);
-                const today = new Date(TODAY_STR);
+                const today = new Date();
                 
                 if (rDate > lDate) return { code: 'danger', color: 'bg-rose-500', text: '需重新鑑別' };
                 if ((today - lDate) / (1000 * 60 * 60 * 24) > 365) return { code: 'warning', color: 'bg-amber-500', text: '例行性檢視' };
@@ -206,7 +219,8 @@
                 setSyncText('正在批次執行全法規鑑別同步...');
                 setIsSyncing(true);
                 setTimeout(() => {
-                    setLaws(prev => prev.map(law => ({ ...law, localCheckDate: TODAY_STR })));
+                    const today = getTodayStr(); // 同步當前時間
+                    setLaws(prev => prev.map(law => ({ ...law, localCheckDate: today })));
                     setIsSyncing(false);
                 }, 2000);
             };
@@ -215,20 +229,22 @@
                 setSyncText('正在更新該項法規鑑別紀錄...');
                 setIsSyncing(true);
                 setTimeout(() => {
-                    setLaws(prev => prev.map(law => law.id === lawId ? { ...law, localCheckDate: TODAY_STR } : law));
+                    const today = getTodayStr(); // 同步當前時間
+                    setLaws(prev => prev.map(law => law.id === lawId ? { ...law, localCheckDate: today } : law));
                     setIsSyncing(false);
                 }, 1000);
             };
 
             const handleExport = () => {
-                const quarter = Math.ceil((new Date(TODAY_STR).getMonth() + 1) / 3);
+                const now = new Date();
+                const quarter = Math.ceil((now.getMonth() + 1) / 3);
                 const exportData = laws.map((law, index) => {
                     const status = getLawStatus(law.remoteDate, law.localCheckDate);
                     return {
                         "序號": index + 1,
                         "法規名稱": law.name,
                         "法規類別": law.type,
-                        "鑑別季度": `2026 Q${quarter}`,
+                        "鑑別季度": `${now.getFullYear()} Q${quarter}`,
                         "全國法規資料庫日期": law.remoteDate,
                         "公司最近登錄/鑑別日期": law.localCheckDate,
                         "合規狀態": status.text
@@ -237,7 +253,7 @@
                 const worksheet = XLSX.utils.json_to_sheet(exportData);
                 const workbook = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(workbook, worksheet, "法規鑑別總表");
-                XLSX.writeFile(workbook, `職安法規鑑別總表_2026_Q${quarter}.xlsx`);
+                XLSX.writeFile(workbook, `職安法規鑑別總表_${now.getFullYear()}_Q${quarter}.xlsx`);
             };
 
             const filteredLaws = useMemo(() => {
@@ -457,26 +473,24 @@
                                                 <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
                                                     <i className="fas fa-list-check text-blue-500"></i> 新舊條文對照表
                                                 </h3>
-                                                <div className="overflow-hidden border border-slate-200 rounded-3xl shadow-sm">
+                                                <div className="overflow-hidden border border-slate-200 rounded-3xl">
                                                     <table className="w-full text-left border-collapse">
                                                         <thead>
                                                             <tr className="bg-slate-50 border-b border-slate-200">
-                                                                <th className="p-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-32">條號</th>
-                                                                <th className="p-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">舊版條文內容</th>
-                                                                <th className="p-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">新版條文內容</th>
-                                                                <th className="p-6 text-[11px] font-black text-slate-400 uppercase tracking-widest w-40">變更說明</th>
+                                                                <th className="px-8 py-6 text-sm font-black text-slate-500 uppercase tracking-wider w-32">條號</th>
+                                                                <th className="px-8 py-6 text-sm font-black text-slate-500 uppercase tracking-wider">修訂前內容</th>
+                                                                <th className="px-8 py-6 text-sm font-black text-slate-500 uppercase tracking-wider">修訂後內容</th>
+                                                                <th className="px-8 py-6 text-sm font-black text-slate-500 uppercase tracking-wider w-40">異動重點</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-slate-100">
-                                                            {currentLawData?.rows.map((row, i) => (
-                                                                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                                                                    <td className="p-6 font-black text-slate-700 text-base align-top">{row.no}</td>
-                                                                    <td className="p-6 text-base text-slate-500 leading-relaxed align-top italic" dangerouslySetInnerHTML={{ __html: row.old }}></td>
-                                                                    <td className="p-6 text-base text-slate-800 font-medium leading-relaxed align-top" dangerouslySetInnerHTML={{ __html: row.new }}></td>
-                                                                    <td className="p-6 align-top">
-                                                                        <span className="text-[11px] font-black bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg border border-blue-100">
-                                                                            {row.note}
-                                                                        </span>
+                                                            {currentLawData?.rows.map((row, idx) => (
+                                                                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                                    <td className="px-8 py-8 text-sm font-black text-slate-800 bg-slate-50/30">{row.no}</td>
+                                                                    <td className="px-8 py-8 text-sm text-slate-500 leading-relaxed font-medium">{row.old}</td>
+                                                                    <td className="px-8 py-8 text-sm text-slate-800 leading-relaxed font-medium" dangerouslySetInnerHTML={{ __html: row.new }}></td>
+                                                                    <td className="px-8 py-8">
+                                                                        <span className="px-4 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-black border border-blue-100 inline-block">{row.note}</span>
                                                                     </td>
                                                                 </tr>
                                                             ))}
@@ -491,20 +505,10 @@
                         </div>
                     </main>
 
-                    <div className="developer-tag group opacity-60 hover:opacity-100 transition-opacity">
-                        <div className="bg-slate-900/95 backdrop-blur-xl text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 border border-white/20 transition-all hover:scale-105 cursor-default">
-                            <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-[0_0_12px_rgba(52,211,153,0.9)] animate-pulse"></div>
-                            <span className="text-xs font-black tracking-[0.2em] uppercase">System Developer By Sam Sun</span>
-                        </div>
+                    <div className="developer-tag flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl shadow-2xl border border-slate-100">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                        <span className="text-xs font-black text-slate-800 uppercase tracking-widest">System Secured</span>
                     </div>
-
-                    <footer className="px-10 py-4 bg-white border-t border-slate-200 flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                        <div className="flex items-center gap-6">
-                            <span>資料來源：全國法規資料庫模擬數據</span>
-                            <span className="text-slate-200">|</span>
-                            <span>已配置：ISO 45001 符合性鑑別模組</span>
-                        </div>
-                    </footer>
                 </div>
             );
         };
