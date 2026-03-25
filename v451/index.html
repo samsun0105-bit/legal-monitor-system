@@ -79,14 +79,14 @@
         const { useState, useMemo, useEffect } = React;
 
         // 當前系統版本
-        const SYSTEM_VERSION = '4.5.2'; // 提升版本號以強制更新快取
+        const SYSTEM_VERSION = '4.5.1';
         const UNIFIED_INITIAL_DATE = '2026-03-02';
 
-        // 模擬鑑別後的異常目標日期 (按下同步後會變成的日期)
+        // 模擬正確更新日期的對照表
         const ANOMALY_DATES = {
-            1: '2025-12-19', // 職業安全衛生法 (同步後變回 12月)
-            5: '2025-09-04', 
-            9: '2025-05-14'  
+            1: '2025-12-19', // 職業安全衛生法
+            5: '2025-09-04', // 職業安全衛生教育訓練規則
+            9: '2025-05-14'  // 有機溶劑中毒預防規則
         };
 
         const LAW_DIFF_DATABASE = {
@@ -94,6 +94,23 @@
                 rows: [
                     { no: '第 4 條', old: '本法適用於各業。但因事業規模、性質及風險程度...', new: '本法適用於各業。但因事業規模、性質及風險程度，經中央主管機關指定公告者，<ins>得分階段適用</ins>。', note: '擴大適用範圍' },
                     { no: '第 45 條', old: '有下列情事之一者，處新臺幣三萬元以上十五萬元以下罰鍰...', new: '有下列情事之一者，處新臺幣三萬元以上<ins>三十萬元</ins>以下罰鍰...', note: '罰則加重' }
+                ]
+            },
+            4: { 
+                rows: [
+                    { no: '第 21 條', old: '雇主對於勞工從事作業，應採取必要之安全設備及措施。', new: '雇主對於勞工從事作業，應採取必要之安全設備及措施，<ins>並應落實自動檢查計畫</ins>。', note: '加強自主管理' },
+                    { no: '第 128-1 條', old: '(新增條文)', new: '<ins>雇主對於高溫環境作業勞工，應提供必要之散熱設備及足夠之飲用水。</ins>', note: '新增熱危害預防' }
+                ]
+            },
+            8: { 
+                rows: [
+                    { no: '附表一', old: '甲苯容許濃度：100 ppm', new: '甲苯容許濃度：<ins>50 ppm</ins>', note: '標準趨嚴' },
+                    { no: '附表一', old: '二甲苯容許濃度：100 ppm', new: '二甲苯容許濃度：<ins>80 ppm</ins>', note: '標準趨嚴' }
+                ]
+            },
+            24: { 
+                rows: [
+                    { no: '第 32-1 條', old: '雇主依第三十二條第一項及第二項規定使勞工延長工作時間...', new: '雇主依第三十二條第一項及第二項規定使勞工延長工作時間，<ins>應核實記載至分鐘為止</ins>。', note: '工時記載精細化' }
                 ]
             }
         };
@@ -120,9 +137,11 @@
             const [searchQuery, setSearchQuery] = useState('');
             const [filterType, setFilterType] = useState('全部');
             const [currentTime, setCurrentTime] = useState(new Date());
+            
+            // 追蹤哪些法規正處於「異常紅字」狀態
             const [anomalyLawIds, setAnomalyLawIds] = useState(new Set());
 
-            // 初始法規清單 - 已將職業安全衛生法 remoteDate 調整為 2025-10-19
+            // 初始法規清單
             const initialLaws = [
                 { id: 1, name: '職業安全衛生法', type: '法律', remoteDate: '2025-10-19', localCheckDate: UNIFIED_INITIAL_DATE },
                 { id: 2, name: '職業安全衛生法施行細則', type: '法規命令', remoteDate: '2020-02-27', localCheckDate: UNIFIED_INITIAL_DATE },
@@ -156,13 +175,12 @@
 
             const [laws, setLaws] = useState(() => {
                 const savedVersion = localStorage.getItem('osh_system_version');
-                // 如果版本號不一致，強制覆蓋為 initialLaws 並更新版本
+                const savedLaws = localStorage.getItem('osh_laws_data');
                 if (savedVersion !== SYSTEM_VERSION) {
                     localStorage.setItem('osh_system_version', SYSTEM_VERSION);
                     localStorage.setItem('osh_laws_data', JSON.stringify(initialLaws));
                     return initialLaws;
                 }
-                const savedLaws = localStorage.getItem('osh_laws_data');
                 return savedLaws ? JSON.parse(savedLaws) : initialLaws;
             });
 
@@ -186,15 +204,20 @@
             };
 
             const getLawStatus = (remoteDate, localDate, isAnomaly) => {
+                // 如果正處於異常狀態（剛同步完但未確認），強制顯示紅色方塊
                 if (isAnomaly) return { code: 'danger', color: 'bg-rose-600', text: '鑑別異常' };
+                
                 const rDate = new Date(remoteDate);
                 const lDate = localDate ? new Date(localDate) : new Date(0);
                 const today = new Date();
+                
+                // 正常的邏輯判斷
                 if (rDate > lDate) return { code: 'danger', color: 'bg-rose-600', text: '鑑別異常' };
                 if ((today - lDate) / (1000 * 60 * 60 * 24) > 365) return { code: 'warning', color: 'bg-amber-500', text: '例行性檢視' };
                 return { code: 'success', color: 'bg-emerald-600', text: '鑑別完成' };
             };
 
+            // 模擬同步：偵測到更新並將指定法規標記為異常(紅字與紅色方塊)
             const handleAllSync = () => {
                 setSyncText('系統偵測中：正在連線全國法規資料庫...');
                 setIsSyncing(true);
@@ -232,11 +255,14 @@
                 }
             };
 
+            // 工作台中的確認並更新邏輯
             const handleConfirmIdentification = (lawId) => {
                 setSyncText('正在歸檔鑑別報告並同步日期...');
                 setIsSyncing(true);
                 setTimeout(() => {
                     const today = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+                    
+                    // 1. 更新法規日期資料
                     setLaws(prev => prev.map(law => {
                         if (law.id === lawId) {
                             return { 
@@ -247,11 +273,14 @@
                         }
                         return law;
                     }));
+
+                    // 2. 解除異常狀態 (項次、日期變回原色，方塊變回綠色)
                     setAnomalyLawIds(prev => {
                         const next = new Set(prev);
                         next.delete(lawId);
                         return next;
                     });
+
                     setIsSyncing(false);
                     setActiveTab('monitor');
                 }, 1500);
@@ -385,6 +414,7 @@
                                                 <div key={law.id} className="p-6 rounded-3xl transition-all flex flex-col lg:flex-row lg:items-center justify-between law-card-glow gap-8">
                                                     <div className="flex gap-6 items-center flex-1">
                                                         <div className="relative shrink-0">
+                                                            {/* 僅修改此處：當異常時，項次編號方塊顏色改為 rose-600 (紅色) */}
                                                             <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center shadow-lg text-white transition-colors duration-300 ${isAnomaly ? 'bg-rose-600' : 'bg-orange-400'}`}>
                                                                 <span className="text-sm font-black tracking-tight">{index + 1}</span>
                                                             </div>
